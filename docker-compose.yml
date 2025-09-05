@@ -1,0 +1,104 @@
+networks:
+  n8n_network:
+    driver: bridge
+    internal: false
+
+secrets:
+  neo4j_password:
+    file: ./secrets/neo4j_password.txt
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    restart: unless-stopped
+    ports:
+      - 80:80 # HTTP
+      - 443:443 # HTTPS (Let's Encrypt)
+    volumes:
+      - caddy_data:/data
+      - ${DATA_FOLDER}/caddy_config:/config
+      - ${DATA_FOLDER}/caddy_config/Caddyfile:/etc/caddy/Caddyfile
+    networks:
+      - n8n_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.107.4
+    restart: unless-stopped
+    # Remove direct port exposure - access only via Caddy
+    # ports:
+    #   - 5678:5678
+    environment:
+      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      # Security hardening
+      - N8N_SECURITY_AUDIT_DAYS=7
+      - N8N_LOG_LEVEL=warn
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ${DATA_FOLDER}/local_files:/files
+    networks:
+      - n8n_network
+    depends_on:
+      - neo4j
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    security_opt:
+      - no-new-privileges:true
+
+  neo4j:
+    image: neo4j:5.23-community
+    restart: unless-stopped
+    # Restrict external access - only internal network
+    ports:
+      - "127.0.0.1:7474:7474" # HTTP (localhost only)
+      - "127.0.0.1:7687:7687" # Bolt (localhost only)
+    environment:
+      - NEO4J_AUTH=neo4j/your-secure-password
+      - NEO4J_PLUGINS=["apoc"]
+      # Memory limits
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512M
+      - NEO4J_server_jvm_additional=-XX:+ExitOnOutOfMemoryError
+      # Security hardening
+      - NEO4J_dbms_security_auth__minimum__password__length=8
+      - NEO4J_dbms_logs_security_level=INFO
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_conf:/conf
+      - neo4j_import:/var/lib/neo4j/import
+    networks:
+      - n8n_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  caddy_data:
+    external: true
+  n8n_data:
+    external: true
+  neo4j_data:
+    external: true
+  neo4j_logs:
+    external: true
+  neo4j_conf:
+    external: true
+  neo4j_import:
+    external: true
