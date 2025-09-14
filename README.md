@@ -1,19 +1,17 @@
 # n8n-docker-caddy
 
-A Docker Compose setup to self-host n8n behind Caddy with automatic HTTPS, plus Neo4j graph database. This provides both a production configuration (Let's Encrypt) and a local development mode (Caddy's internal CA).
+A Docker Compose setup to self-host n8n and Neo4j graph database with direct port exposure for local development.
 
 ## Features
 
 - Workflow automation with n8n
 - Neo4j graph database with APOC plugins
-- Caddy reverse-proxy with automatic TLS
+- Direct port exposure for n8n (5678) and Neo4j (7475 & 7688)
 - Persistent storage via Docker volumes
 - Local file mounting for binary data
 - **🛡️ Enhanced Security Features:**
   - Isolated Docker network for container communication
   - Resource limits and security constraints
-  - Localhost-only Neo4j access
-  - No direct port exposure for n8n (Caddy proxy only)
   - Specific image versions (no `:latest` tags)
 
 ## Prerequisites
@@ -47,15 +45,7 @@ docker volume create neo4j_conf
 docker volume create neo4j_import
 ```
 
-### 2. Configure Local DNS
-
-Edit `/etc/hosts` to point your hostname to localhost:
-
-```text
-127.0.0.1   n8n.local.dev
-```
-
-### 3. Flush DNS Cache (macOS)
+### 2. Flush DNS Cache (macOS)
 
 ```bash
 sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
@@ -75,32 +65,16 @@ This will start:
 - **n8n** (workflow automation)
 - **Neo4j** (graph database)
 
-### 5. Trust Caddy's Internal CA
-
-For HTTPS to work without browser warnings:
-
-```bash
-# Export the root certificate
-docker run --rm \
-  -v caddy_data:/data \
-  caddy:latest \
-  cat /data/caddy/pki/authorities/local/root.crt > ~/caddy_internal_root.crt
-
-# Trust it on macOS
-sudo security add-trusted-cert -d -r trustRoot \
-  -k /Library/Keychains/System.keychain ~/caddy_internal_root.crt
-```
-
 ### 6. Access the Services
 
-- **n8n**: <https://n8n.local.dev>
-- **Neo4j Browser**: <http://localhost:7474>
+- **n8n**: <http://localhost:5678>
+- **Neo4j Browser**: <http://localhost:7475>
 
 ## Connecting n8n to Neo4j
 
 When creating Neo4j nodes in n8n workflows, use these connection settings:
 
-- **Connection URL**: `bolt://neo4j:7687`
+- **Connection URL (Bolt)**: `bolt://localhost:7688`
 - **Username**: `neo4j`
 - **Password**: Use the password from your `.env` file (`NEO4J_PASSWORD`)
 
@@ -109,18 +83,26 @@ The `neo4j` hostname works because both containers are on the same isolated Dock
 ## Service Architecture
 
 ```text
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   Browser       │    │    Caddy     │    │      n8n        │
-│ n8n.local.dev   │───▶│ :80, :443    │───▶│ :5678           │
-└─────────────────┘    └──────────────┘    └─────────────────┘
-                                                     │
-┌─────────────────┐                                  │
-│   Browser       │                                  │
-│ localhost:7474  │                                  ▼
-└─────────────────┘                           ┌─────────────────┐
-        │                                     │     Neo4j       │
-        └────────────────────────────────────▶│ :7474, :7687    │
-                                              └─────────────────┘
+┌───────────────┐    ┌──────────┐
+│   Browser     │    │    n8n   │
+│ localhost:5678│───▶│ :5678    │
+└───────────────┘    └──────────┘
+      │
+      ▼
+┌─────────────────┐
+│   Neo4j Browser │
+│ localhost:7475  │
+└─────────────────┘
+
+┌───────────────┐
+│ n8n Workflows │
+│ bolt://localhost:7688 │
+└───────────────┘        │
+                        ▼
+                   ┌──────────┐
+                   │  Neo4j   │
+                   │ :7474, :7687 │
+                   └──────────┘
 ```
 
 ## Production
