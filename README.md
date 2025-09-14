@@ -26,29 +26,12 @@ A Docker Compose setup to self-host n8n behind Caddy with automatic HTTPS, plus 
   SUBDOMAIN=n8n
   DOMAIN_NAME=local.dev
   GENERIC_TIMEZONE=Pacific/Auckland
+  NEO4J_PASSWORD=your_secure_password_here
   ```
-
-> **🔐 Security Note**: Passwords are managed securely via the setup script, not stored in `.env` files.
 
 ## Setup Instructions
 
-### 1. Quick Setup (Recommended)
-
-Run the automated security setup script:
-
-```bash
-./setup-security.sh
-```
-
-This script will:
-
-- Generate secure passwords
-- Create required directories
-- Configure `.env` file template
-- Set proper file permissions
-- Add secrets to `.gitignore`
-
-### 2. Create Docker Volumes
+### 1. Create Docker Volumes
 
 Create all required external volumes for persistent data storage:
 
@@ -64,7 +47,7 @@ docker volume create neo4j_conf
 docker volume create neo4j_import
 ```
 
-### 3. Configure Local DNS
+### 2. Configure Local DNS
 
 Edit `/etc/hosts` to point your hostname to localhost:
 
@@ -72,13 +55,13 @@ Edit `/etc/hosts` to point your hostname to localhost:
 127.0.0.1   n8n.local.dev
 ```
 
-### 4. Flush DNS Cache (macOS)
+### 3. Flush DNS Cache (macOS)
 
 ```bash
 sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 ```
 
-### 5. Launch the Stack
+### 4. Launch the Stack
 
 Start all services:
 
@@ -92,7 +75,7 @@ This will start:
 - **n8n** (workflow automation)
 - **Neo4j** (graph database)
 
-### 6. Trust Caddy's Internal CA
+### 5. Trust Caddy's Internal CA
 
 For HTTPS to work without browser warnings:
 
@@ -108,7 +91,7 @@ sudo security add-trusted-cert -d -r trustRoot \
   -k /Library/Keychains/System.keychain ~/caddy_internal_root.crt
 ```
 
-### 7. Access the Services
+### 6. Access the Services
 
 - **n8n**: <https://n8n.local.dev>
 - **Neo4j Browser**: <http://localhost:7474>
@@ -119,7 +102,7 @@ When creating Neo4j nodes in n8n workflows, use these connection settings:
 
 - **Connection URL**: `bolt://neo4j:7687`
 - **Username**: `neo4j`
-- **Password**: Check `secrets/neo4j_password.txt` for the generated password
+- **Password**: Use the password from your `.env` file (`NEO4J_PASSWORD`)
 
 The `neo4j` hostname works because both containers are on the same isolated Docker network, allowing secure internal service discovery.
 
@@ -150,9 +133,8 @@ This setup includes several production-ready security enhancements:
 
 ### 🔐 **Secret Management**
 
-- Passwords stored in `secrets/` directory, not environment variables
-- Automatic password generation via setup script
-- Proper file permissions (600) for secret files
+- Neo4j password stored in `.env` file for easy configuration
+- Proper environment variable isolation between containers
 
 ### 🌐 **Network Security**
 
@@ -172,7 +154,7 @@ This setup includes several production-ready security enhancements:
 ### Neo4j Connection Issues
 
 - Verify Neo4j is running: `docker-compose logs neo4j`
-- Test connection: `docker-compose exec neo4j cypher-shell -a bolt://localhost:7687 -u neo4j -p $(cat secrets/neo4j_password.txt)`
+- Test connection: `docker-compose exec neo4j cypher-shell -a bolt://localhost:7687 -u neo4j -p $NEO4J_PASSWORD`
 - If containers restart frequently, check: `docker-compose ps`
 
 ### n8n Access Issues
@@ -185,7 +167,7 @@ This setup includes several production-ready security enhancements:
 ### Common Issues
 
 - **"Connection refused"**: Check if all containers are running with `docker-compose ps`
-- **"Invalid password"**: Verify password in `secrets/neo4j_password.txt`
+- **"Invalid password"**: Verify password in your `.env` file (`NEO4J_PASSWORD`)
 - **"Network not found"**: Run `docker-compose down && docker-compose up -d`
 
 ## Attribution
@@ -193,10 +175,9 @@ This setup includes several production-ready security enhancements:
 This project is based on the original [n8n-docker-caddy](https://github.com/n8n-io/n8n-docker-caddy) setup by n8n with significant modifications and additions including:
 
 - **Neo4j integration** with APOC plugins for graph database workflows
-- **Enhanced security** with isolated networks, secret management, and container hardening
+- **Enhanced security** with isolated networks, environment variable management, and container hardening
 - **Local development configuration** with `.local.dev` domains and internal CA
 - **Production-ready architecture** with resource limits and security constraints
-- **Automated setup scripts** for easy deployment and configuration
 - **Comprehensive documentation** with troubleshooting guides
 
 ## License
